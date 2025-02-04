@@ -1,29 +1,31 @@
 import express from 'express';
-import ShopifyClient from '../clients/shopify-client.js'; // Use .js extension
-import SyncService from '../services/sync-service.js'; // Use .js extension
+import { createShopifyClient, validateShopifyConnection } from '../services/shopify-service.js';
+import logger from '../utils/logger.js';
+import syncService from '../services/sync-service.js'; // Import syncService
 
 const router = express.Router();
 
-const pimClient = new ShopifyClient(
-  'backend-test-pim',
-  process.env.PIM_ACCESS_TOKEN
-);
-
-const receiverClient = new ShopifyClient(
-  'bl-backend-test',
-  process.env.RECEIVER_ACCESS_TOKEN
-);
-
-const syncService = new SyncService(pimClient, receiverClient);
-
 router.post('/sync-products', async (req, res) => {
   try {
-    await syncService.sync();
-    res.json({ success: true, message: 'Products synchronized successfully' });
+    const sourceClient = createShopifyClient('source');
+    const receiverClient = createShopifyClient('receiver');
+
+    await validateShopifyConnection(sourceClient);
+    await validateShopifyConnection(receiverClient);
+
+    const result = await syncService.syncProducts(); // Use syncService
+    res.json({ success: true, ...result });
   } catch (error) {
-    console.error('Sync failed:', error);
-    res.status(500).json({ success: false, error: error.message });
+    logger.error('Sync error:', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to connect to one or both Shopify stores'
+    });
   }
 });
 
-export default router; // Use export default instead of module.exports
+export default router;
