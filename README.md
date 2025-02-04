@@ -12,6 +12,9 @@ Shopify Admin API access tokens for both stores:
 - RECEIVER_ACCESS_TOKEN=???????
 - RECEIVER_STORE_NAME=????????
 
+#### Server Port
+server.port=8081
+
 ## Prerequisites
 - Node.js (v14 or higher)
 - npm
