@@ -7,11 +7,10 @@ const router = express.Router();
 
 router.post('/sync-products', async (req, res) => {
   try {
-    console.log('Checking logger configuration'); // Temporary debug log
     logger.info('Starting product synchronization process');
     
     // Add debug level logging to ensure logger is working
-    logger.debug('Logger is functioning');
+    logger.debug('Debug Logger is functioning');
 
     logger.info('Creating Shopify clients');
     const sourceClient = createShopifyClient('source');
