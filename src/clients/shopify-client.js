@@ -1,6 +1,9 @@
 import axios from 'axios';
 import logger from '../utils/logger.js';
 
+
+logger.debug('Shopify client initialized');
+logger.info(`Making ${method} request to ${endpoint}`);
 class ShopifyClient {
   constructor(storeName, accessToken) {
     this.apiVersion = '2024-01'; // Update to latest stable version
