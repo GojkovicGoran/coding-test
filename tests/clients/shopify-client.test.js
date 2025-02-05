@@ -1,35 +1,60 @@
 import axios from 'axios';
+import ShopifyClient from '../../src/clients/shopify-client';
 
-class ShopifyClient {
-  constructor(storeName, accessToken) {
-    this.apiVersion = '2023-01';  // Fixed version to match tests
-    this.storeName = storeName;
-    this.accessToken = accessToken;
-  }
+jest.mock('axios');
 
-  async _makeRequest(method, endpoint, data = undefined) {  // Changed default to undefined
-    const response = await axios({
-      method,
-      url: `https://${this.storeName}.myshopify.com/admin/api/${this.apiVersion}/${endpoint}`,
-      headers: {
-        'X-Shopify-Access-Token': this.accessToken,
-      },
-      data
+describe('ShopifyClient', () => {
+  let client;
+  const storeName = 'test-store';
+  const accessToken = 'test-token';
+  const baseUrl = `https://${storeName}.myshopify.com/admin/api/2023-01`;
+
+  beforeEach(() => {
+    client = new ShopifyClient(storeName, accessToken);
+    jest.clearAllMocks();
+  });
+
+  describe('constructor', () => {
+    it('should initialize with correct properties', () => {
+      expect(client.storeName).toBe(storeName);
+      expect(client.accessToken).toBe(accessToken);
+      expect(client.apiVersion).toBe('2023-01');
     });
+  });
 
-    return response.data;
-  }
+  describe('getProducts', () => {
+    it('should fetch all products', async () => {
+      const mockProducts = [{ id: 1 }, { id: 2 }];
+      axios.mockResolvedValueOnce({ data: { products: mockProducts } });
 
-  async getProducts() {
-    const response = await this._makeRequest('GET', 'products.json');
-    return response.products;
-  }
+      const result = await client.getProducts();
 
-  async getProduct(productId) {
-    const response = await this._makeRequest('GET', `products/${productId}.json`);
-    return response.product;
-  }
-}
+      expect(axios).toHaveBeenCalledWith({
+        method: 'GET',
+        url: `${baseUrl}/products.json`,
+        headers: { 'X-Shopify-Access-Token': accessToken },
+        data: undefined
+      });
+      expect(result).toEqual(mockProducts);
+    });
+  });
 
-export default ShopifyClient;
+  describe('getProduct', () => {
+    it('should fetch a single product', async () => {
+      const productId = '123';
+      const mockProduct = { id: productId, title: 'Test Product' };
+      axios.mockResolvedValueOnce({ data: { product: mockProduct } });
+
+      const result = await client.getProduct(productId);
+
+      expect(axios).toHaveBeenCalledWith({
+        method: 'GET',
+        url: `${baseUrl}/products/${productId}.json`,
+        headers: { 'X-Shopify-Access-Token': accessToken },
+        data: undefined
+      });
+      expect(result).toEqual(mockProduct);
+    });
+  });
+});
 
