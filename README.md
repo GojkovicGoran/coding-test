@@ -31,13 +31,11 @@ npm test
 - Once the application is running, you can access at:
 http://localhost:PORT/api/sync/products
 
-## Features
 - Product synchronization between Shopify stores
 - RESTful API endpoints for sync operations
 - Error handling and logging
 - Built with Express.js and Axios
 
-**Project Structure**
 src/
   ├── clients/      # API clients
   ├── services/     # Business logic
