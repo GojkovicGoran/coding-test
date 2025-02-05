@@ -1,6 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import syncRoutes from './routes/sync-routers.js';
+import syncRoutes from './routers/sync-router.js';
 import logger from './utils/logger.js';
 import config from './config/index.js';
 
