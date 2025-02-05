@@ -11,7 +11,7 @@ Shopify Admin API access tokens for both stores:
 - PIM_ACCESS_TOKEN=??????
 - RECEIVER_ACCESS_TOKEN=???????
 - RECEIVER_STORE_NAME=????????
-
+- LOG_LEVEL=
 #### Server Port
 server.port=3001
 
