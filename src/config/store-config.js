@@ -10,7 +10,8 @@ const requiredEnvVars = [
   'SOURCE_STORE_NAME',
   'SOURCE_ACCESS_TOKEN',
   'SHOPIFY_STORE_NAME',
-  'SHOPIFY_ACCESS_TOKEN'
+  'SHOPIFY_ACCESS_TOKEN',
+  'SHOPIFY_API_VERSION'
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -22,12 +23,12 @@ export default {
   source: {
     storeName: process.env.SOURCE_STORE_NAME,
     accessToken: process.env.SOURCE_ACCESS_TOKEN,
-    apiVersion: process.env.SHOPIFY_API_VERSION || '2025-01'
+    apiVersion: process.env.SHOPIFY_API_VERSION
   },
-  shopify: {
+  destination: {
     storeName: process.env.SHOPIFY_STORE_NAME,
     accessToken: process.env.SHOPIFY_ACCESS_TOKEN,
-    apiVersion: process.env.SHOPIFY_API_VERSION || '2025-01'
+    apiVersion: process.env.SHOPIFY_API_VERSION
   },
   app: {
     batchSize: parseInt(process.env.BATCH_SIZE || '50'),

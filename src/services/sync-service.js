@@ -2,12 +2,12 @@ import logger from '../utils/logger.js';
 import config from '../config/store-config.js';
 
 export class SyncService {
-  constructor(pimClient, shopifyClient) {
-    if (!pimClient?.getProducts) throw new Error('PIM client is required');
-    if (!shopifyClient?.getProducts) throw new Error('Shopify client is required');
+  constructor(sourceStore, receiverStore) {
+    if (!sourceStore?.getProducts) throw new Error('Source store client is required');
+    if (!receiverStore?.getProducts) throw new Error('Receiver store client is required');
 
-    this.pimClient = pimClient;
-    this.shopifyClient = shopifyClient;
+    this.sourceStore = sourceStore;
+    this.receiverStore = receiverStore;
     
     // Add defaults in case config.app is undefined
     const defaultConfig = {
@@ -35,22 +35,23 @@ export class SyncService {
     try {
       logger.info('Starting products synchronization');
 
-      // Fix method calls to use correct methods from shopifyClient
-      const pimProducts = await this.pimClient.getProducts();
-      const shopifyProducts = await this.shopifyClient.getProducts();
+      const [sourceProducts, receiverProducts] = await Promise.all([
+        this.sourceStore.getProducts(),
+        this.receiverStore.getProducts()
+      ]);
 
-      if (!Array.isArray(pimProducts) || !Array.isArray(shopifyProducts)) {
+      if (!Array.isArray(sourceProducts) || !Array.isArray(receiverProducts)) {
         throw new Error('Invalid response format from API');
       }
 
-      logger.info(`Retrieved ${pimProducts.length} PIM products and ${shopifyProducts.length} Shopify products`);
+      logger.info(`Retrieved ${sourceProducts.length} source products and ${receiverProducts.length} receiver products`);
 
-      // Create lookup map for existing Shopify products
-      const shopifyProductMap = new Map();
-      shopifyProducts.forEach(product => {
+      // Create lookup map for existing receiver products
+      const receiverProductMap = new Map();
+      receiverProducts.forEach(product => {
         const variant = product.variants?.[0];
         if (variant?.sku) {
-          shopifyProductMap.set(variant.sku, product);
+          receiverProductMap.set(variant.sku, product);
         }
       });
 
@@ -62,26 +63,10 @@ export class SyncService {
         skipped: 0
       };
 
-      // Process each PIM product
-      for (const pimProduct of pimProducts) {
+      // Process each source product
+      for (const sourceProduct of sourceProducts) {
         try {
-          const sku = pimProduct.variants?.[0]?.sku;
-          if (!sku) {
-            logger.warn('Skipping product without SKU', { title: pimProduct.title });
-            stats.skipped++;
-            continue;
-          }
-
-          const existingProduct = shopifyProductMap.get(sku);
-          if (existingProduct) {
-            await this.shopifyClient.updateProduct(existingProduct.id, pimProduct);
-            stats.updated++;
-          } else {
-            await this.shopifyClient.createProduct(pimProduct);
-            stats.created++;
-          }
-          
-          stats.processed++;
+          await this.processProduct(sourceProduct, receiverProductMap, stats);
 
           if (stats.processed % this.batchSize === 0) {
             logger.info(`Processed ${stats.processed} products, pausing...`);
@@ -91,8 +76,8 @@ export class SyncService {
         } catch (error) {
           stats.failed++;
           logger.error('Failed to process product', {
-            title: pimProduct.title,
-            sku: pimProduct.variants?.[0]?.sku,
+            title: sourceProduct.title,
+            sku: sourceProduct.variants?.[0]?.sku,
             error: error.message
           });
 
@@ -108,7 +93,7 @@ export class SyncService {
       return {
         success: true,
         ...stats,
-        total: pimProducts.length
+        total: sourceProducts.length
       };
 
     } catch (error) {
@@ -117,22 +102,22 @@ export class SyncService {
     }
   }
 
-  async processProduct(pimProduct, shopifyProductMap, stats) {
-    const sku = pimProduct.variants?.[0]?.sku;
+  async processProduct(sourceProduct, receiverProductMap, stats) {
+    const sku = sourceProduct.variants?.[0]?.sku;
     if (!sku) {
-      logger.warn('Skipping product without SKU', { title: pimProduct.title });
+      logger.warn('Skipping product without SKU', { title: sourceProduct.title });
       stats.skipped++;
       return;
     }
 
-    const existingProduct = shopifyProductMap.get(sku);
+    const existingProduct = receiverProductMap.get(sku);
     
     try {
       if (existingProduct) {
-        await this.updateProduct(pimProduct, existingProduct);
+        await this.updateProduct(sourceProduct, existingProduct, sku);
         stats.updated++;
       } else {
-        await this.createProduct(pimProduct);
+        await this.createProduct(sourceProduct, sku);
         stats.created++;
       }
       stats.processed++;
@@ -141,43 +126,43 @@ export class SyncService {
     }
   }
 
-  async updateProduct(pimProduct, receiverProduct, sku) {
-    this.logger.info(`Updating product with SKU: ${sku}`);
+  async updateProduct(sourceProduct, receiverProduct, sku) {
+    logger.info(`Updating product with SKU: ${sku}`);
 
     // Copy IDs from receiver product
-    pimProduct.id = receiverProduct.id;
+    sourceProduct.id = receiverProduct.id;
 
     const minLength = Math.min(
-      pimProduct.variants.length,
+      sourceProduct.variants.length,
       receiverProduct.variants.length
     );
 
     for (let i = 0; i < minLength; i++) {
-      pimProduct.variants[i].id = receiverProduct.variants[i].id;
+      sourceProduct.variants[i].id = receiverProduct.variants[i].id;
     }
 
-    await this.shopifyClient.updateProduct(pimProduct, receiverProduct.id);
+    await this.receiverStore.updateProduct(sourceProduct, receiverProduct.id);
   }
 
-  async createProduct(pimProduct, sku) {
-    this.logger.info(`Creating new product with SKU: ${sku}`);
+  async createProduct(sourceProduct, sku) {
+    logger.info(`Creating new product with SKU: ${sku}`);
 
     // Remove existing IDs
     const newProduct = {
-      ...pimProduct,
+      ...sourceProduct,
       id: undefined,
-      variants: pimProduct.variants.map(variant => ({
+      variants: sourceProduct.variants.map(variant => ({
         ...variant,
         id: undefined
       }))
     };
 
-    await this.shopifyClient.createProduct(newProduct);
+    await this.receiverStore.createProduct(newProduct);
   }
 }
 
-export const createSyncService = (pimClient, shopifyClient) => {
-  return new SyncService(pimClient, shopifyClient);
+export const createSyncService = (sourceStore, receiverStore) => {
+  return new SyncService(sourceStore, receiverStore);
 };
 
 export default {

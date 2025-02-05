@@ -1,5 +1,4 @@
-import { createShopifyClient, validateShopifyConnection } from '../services/shopify-service.js';
-import { createPimClient, validatePimConnection } from '../services/pim-service.js';
+import { createStoreClient, validateStoreConnection } from '../services/store-service.js';
 import { createSyncService } from '../services/sync-service.js';
 import logger from '../utils/logger.js';
 
@@ -8,31 +7,23 @@ export class SyncController {
     try {
       logger.info('Starting product synchronization process');
 
-      // Initialize clients
-      const [pimClient, shopifyClient] = await Promise.all([
-        createPimClient(),
-        createShopifyClient()
-      ]);
+      // Initialize source and destination clients
+      const sourceStore = createStoreClient('source');
+      const destinationStore = createStoreClient('destination');
 
       // Validate both connections
       await Promise.all([
-        validatePimConnection(pimClient),
-        validateShopifyConnection(shopifyClient)
+        validateStoreConnection(sourceStore, 'source'),
+        validateStoreConnection(destinationStore, 'destination')
       ]);
 
       // Create sync service with validated clients
-      const syncService = createSyncService(pimClient, shopifyClient);
-
-      // Perform sync
+      const syncService = createSyncService(sourceStore, destinationStore);
       const result = await syncService.syncProducts();
       
       return res.json({ success: true, ...result });
     } catch (error) {
-      logger.error('Sync error:', {
-        error: error.message,
-        stack: error.stack
-      });
-
+      logger.error('Sync error:', { error: error.message });
       return res.status(500).json({
         success: false,
         error: error.message
