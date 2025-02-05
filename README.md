@@ -29,7 +29,7 @@ npm start (node src/app.js)
 npm test
 
 - Once the application is running, you can access at:
-http://localhost:PORT/api/sync/products  
+http://localhost:PORT/api/sync/products
 
 ## Features
 - Product synchronization between Shopify stores
@@ -37,7 +37,7 @@ http://localhost:PORT/api/sync/products
 - Error handling and logging
 - Built with Express.js and Axios
 
-## Project Structure
+**Project Structure**
 src/
   ├── clients/      # API clients
   ├── services/     # Business logic
