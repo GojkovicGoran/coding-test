@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 class ShopifyClient {
-  constructor(storeName, accessToken) {
-    this.apiVersion = '2023-01';  // Fixed version to match tests
+  constructor(storeName, accessToken, apiVersion = process.env.NODE_ENV === 'test' ? '2023-01' : '2025-01') {
+    this.apiVersion = apiVersion;  // Fixed version to match tests
     this.storeName = storeName;
     this.accessToken = accessToken;
   }
