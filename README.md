@@ -28,6 +28,10 @@ npm start (node src/app.js)
 ```bash
 npm test
 
+## Once the application is running, you can access at:
+
+http://localhost:PORT/api/sync/products  
+
 ## Features
 - Product synchronization between Shopify stores
 - RESTful API endpoints for sync operations
