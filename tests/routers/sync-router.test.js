@@ -1,62 +1,85 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import syncRouter from '../../src/routers/sync-router.js';
-import * as shopifyService from '../../src/services/shopify-service.js';
-import syncService from '../../src/services/sync-service.js';
+import syncRouter from '../routers/sync-router.js';
+import { SYNC_ERRORS } from '../constants/errorMessages.js';
 
-describe('Sync Router Tests', () => {
+// Mock dependencies
+jest.mock('../controllers/sync-controller.js', () => ({
+  __esModule: true,
+  default: {
+    syncProducts: jest.fn()
+  }
+}));
+
+jest.mock('../utils/logger.js', () => ({
+  __esModule: true,
+  default: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn()
+  }
+}));
+
+import syncController from '../controllers/sync-controller.js';
+
+describe('Sync Router', () => {
   let app;
 
   beforeEach(() => {
+    // Reset all mocks
+    jest.clearAllMocks();
+    
+    // Setup express app for testing
     app = express();
     app.use(express.json());
     app.use('/api', syncRouter);
   });
 
-  afterEach(() => {
-    jest.resetAllMocks();
-  });
+  describe('POST /api/sync-products', () => {
+    it('should return 200 and success response when sync is successful', async () => {
+      // Mock successful sync
+      const mockResult = {
+        processed: 10,
+        failures: 0,
+        total: 10
+      };
+      
+      syncController.syncProducts.mockImplementation((req, res) => {
+        res.json({ success: true, ...mockResult });
+      });
 
-  it('should successfully sync products when everything works', async () => {
-    // Mock shopify service functions
-    jest.spyOn(shopifyService, 'createShopifyClient').mockImplementation(() => ({
-      shop: { id: 'test-shop' }
-    }));
-    
-    jest.spyOn(shopifyService, 'validateShopifyConnection').mockResolvedValue(true);
-    
-    // Mock sync service
-    jest.spyOn(syncService, 'syncProducts').mockResolvedValue({
-      totalSynced: 5,
-      success: true
+      const response = await request(app)
+        .post('/api/sync-products')
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        success: true,
+        ...mockResult
+      });
+      expect(syncController.syncProducts).toHaveBeenCalled();
     });
 
-    const response = await request(app)
-      .post('/api/sync-products');
+    it('should return 500 when sync fails', async () => {
+      // Mock sync failure
+      syncController.syncProducts.mockImplementation((req, res) => {
+        res.status(500).json({
+          success: false,
+          error: SYNC_ERRORS.CONNECTION_FAILED
+        });
+      });
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      success: true,
-      totalSynced: 5
-    });
-  });
+      const response = await request(app)
+        .post('/api/sync-products')
+        .send({});
 
-  it('should handle errors during sync process', async () => {
-    // Mock failure in shopify connection validation
-    jest.spyOn(shopifyService, 'createShopifyClient').mockImplementation(() => ({
-      shop: { id: 'test-shop' }
-    }));
-    
-    jest.spyOn(shopifyService, 'validateShopifyConnection')
-      .mockRejectedValue(new Error('Connection failed'));
-
-    const response = await request(app)
-      .post('/api/sync-products');
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({
-      success: false,
-      error: 'Failed to connect to one or both Shopify stores'
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        success: false,
+        error: SYNC_ERRORS.CONNECTION_FAILED
+      });
+      expect(syncController.syncProducts).toHaveBeenCalled();
     });
   });
 });

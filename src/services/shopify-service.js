@@ -1,37 +1,52 @@
-import Shopify from 'shopify-api-node';
-import config from '../config/index.js';
+import ShopifyClient from '../clients/shopify-client.js';
+import config from '../config/store-config.js';
 import logger from '../utils/logger.js';
 
-export const createShopifyClient = (storeType = 'source') => {
+export const createShopifyClient = () => {
   try {
-    const storeConfig = config.shopify[storeType];
-
-    if (!storeConfig.accessToken || !storeConfig.storeName) {
-      throw new Error(`Missing Shopify credentials for ${storeType} store`);
+    const { storeName, accessToken, apiVersion } = config.shopify;
+    
+    if (!storeName || !accessToken) {
+      throw new Error('Missing Shopify credentials');
     }
 
-    return new Shopify({
-      shopName: storeConfig.storeName,
-      accessToken: storeConfig.accessToken,
-      apiVersion: storeConfig.apiVersion
-    });
+    // Remove .myshopify.com if it's included in the store name
+    const cleanStoreName = storeName.replace('.myshopify.com', '');
+    
+    logger.debug('Creating Shopify client', { store: cleanStoreName });
+    
+    return new ShopifyClient(
+      cleanStoreName,
+      accessToken,
+      apiVersion
+    );
   } catch (error) {
-    logger.error(`Failed to create Shopify client for ${storeType}:`, error);
+    logger.error('Failed to create Shopify client:', error);
     throw error;
   }
 };
 
 export const validateShopifyConnection = async (client) => {
   try {
-    await client.shop.get();
-    logger.info('Successfully connected to Shopify store');
+    logger.debug('Validating Shopify connection');
+    const products = await client.getProducts();
+    
+    if (!Array.isArray(products)) {
+      throw new Error('Invalid response from Shopify API');
+    }
+    
+    logger.info('Successfully validated Shopify connection');
+    return true;
   } catch (error) {
-    logger.error('Shopify API error', {
-      endpoint: 'shop.json',
-      method: 'GET',
+    logger.error('Shopify connection validation failed:', {
       error: error.message,
-      stack: error.stack,
+      details: error.response?.data || 'No additional details'
     });
-    throw new Error('Failed to validate Shopify connection');
+    throw new Error(`Shopify connection failed: ${error.message}`);
   }
+};
+
+export default {
+  createShopifyClient,
+  validateShopifyConnection
 };
