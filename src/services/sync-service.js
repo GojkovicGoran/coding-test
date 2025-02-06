@@ -105,7 +105,10 @@ export class SyncService {
   async processProduct(sourceProduct, receiverProductMap, stats) {
     const sku = sourceProduct.variants?.[0]?.sku;
     if (!sku) {
-      logger.warn('Skipping product without SKU', { title: sourceProduct.title });
+      logger.warn('Skipping product without SKU', { 
+        title: sourceProduct.title,
+        details: 'Product is missing SKU in first variant'
+      });
       stats.skipped++;
       return;
     }
@@ -113,6 +116,19 @@ export class SyncService {
     const existingProduct = receiverProductMap.get(sku);
     
     try {
+      // Validate IDs before processing
+      if (existingProduct) {
+        if (!this.validateProductIds(existingProduct)) {
+          logger.warn('Skipping product with invalid IDs', {
+            sku,
+            title: sourceProduct.title,
+            productId: existingProduct.id
+          });
+          stats.skipped++;
+          return;
+        }
+      }
+
       if (existingProduct) {
         await this.updateProduct(sourceProduct, existingProduct, sku);
         stats.updated++;
@@ -122,26 +138,62 @@ export class SyncService {
       }
       stats.processed++;
     } catch (error) {
-      throw new Error(`Failed to process product ${sku}: ${error.message}`);
+      const errorContext = {
+        sku,
+        title: sourceProduct.title,
+        operation: existingProduct ? 'update' : 'create',
+        errorDetails: error.details || error.message
+      };
+      
+      if (error.message?.includes('expected String to be a id')) {
+        logger.error('Invalid ID format in product data', errorContext);
+        stats.skipped++;
+        return;
+      }
+
+      logger.error('Failed to process product', errorContext);
+      throw error;
     }
+  }
+
+  validateProductIds(product) {
+    // Ensure product ID is a valid string number
+    if (!product.id || !/^\d+$/.test(String(product.id))) {
+      return false;
+    }
+
+    // Validate variant IDs if present
+    if (product.variants) {
+      return product.variants.every(variant => 
+        variant.id && /^\d+$/.test(String(variant.id))
+      );
+    }
+
+    return true;
   }
 
   async updateProduct(sourceProduct, receiverProduct, sku) {
     logger.info(`Updating product with SKU: ${sku}`);
 
-    // Copy IDs from receiver product
-    sourceProduct.id = receiverProduct.id;
+    try {
+      // Ensure IDs are strings
+      sourceProduct.id = String(receiverProduct.id);
 
-    const minLength = Math.min(
-      sourceProduct.variants.length,
-      receiverProduct.variants.length
-    );
+      const minLength = Math.min(
+        sourceProduct.variants?.length || 0,
+        receiverProduct.variants?.length || 0
+      );
 
-    for (let i = 0; i < minLength; i++) {
-      sourceProduct.variants[i].id = receiverProduct.variants[i].id;
+      // Ensure variant IDs are strings
+      sourceProduct.variants = (sourceProduct.variants || []).map((variant, i) => ({
+        ...variant,
+        id: i < minLength ? String(receiverProduct.variants[i].id) : undefined
+      }));
+
+      await this.receiverStore.updateProduct(sourceProduct, sourceProduct.id);
+    } catch (error) {
+      throw new Error(`Failed to update product ${sku}: ${error.message}`);
     }
-
-    await this.receiverStore.updateProduct(sourceProduct, receiverProduct.id);
   }
 
   async createProduct(sourceProduct, sku) {
