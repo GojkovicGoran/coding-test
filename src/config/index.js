@@ -5,8 +5,8 @@ dotenv.config();
 export default {
   shopify: {
     source: {
-      storeName: process.env.SHOPIFY_STORE_NAME,
-      accessToken: process.env.PIM_ACCESS_TOKEN,
+      storeName: process.env.SOURCE_STORE_NAME,
+      accessToken: process.env.SOURCE_ACCESS_TOKEN,
       apiVersion: process.env.SHOPIFY_API_VERSION,
     },
     receiver: {

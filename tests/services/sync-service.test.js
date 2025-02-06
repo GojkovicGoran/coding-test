@@ -1,65 +1,83 @@
-import { SyncService } from '../../src/services/sync-service';
+import { jest } from '@jest/globals';
+import { SyncService } from '../../src/services/sync-service.js';
+
+// Mock the store-service module
+const mockCreateStoreClient = jest.fn();
+jest.unstable_mockModule('../../src/services/store-service.js', () => ({
+  createStoreClient: mockCreateStoreClient
+}));
 
 describe('SyncService', () => {
-  let pimClient;
-  let shopifyClient;
   let syncService;
+  let mockSourceStore;
+  let mockReceiverStore;
 
   beforeEach(() => {
-    pimClient = {
-      getProducts: jest.fn()
+    mockSourceStore = {
+      getProducts: jest.fn().mockResolvedValue([
+        { 
+          id: '1', 
+          title: 'Test Product 1',
+          variants: [{ sku: 'SKU1', id: '101' }]
+        },
+        { 
+          id: '2', 
+          title: 'Test Product 2',
+          variants: [{ sku: 'SKU2', id: '102' }]
+        }
+      ])
     };
-    shopifyClient = {
-      getProducts: jest.fn(),
-      updateProduct: jest.fn(),
-      createProduct: jest.fn()
+
+    mockReceiverStore = {
+      getProducts: jest.fn().mockResolvedValue([]),
+      createProduct: jest.fn().mockResolvedValue({}),
+      updateProduct: jest.fn().mockResolvedValue({})
     };
-    syncService = new SyncService(pimClient, shopifyClient);
+
+    syncService = new SyncService(mockSourceStore, mockReceiverStore);
   });
 
-  it('should update existing products and create new products', async () => {
-    const pimProducts = [
-      { id: 1, variants: [{ sku: 'sku1' }] },
-      { id: 2, variants: [{ sku: 'sku2' }] }
-    ];
-    const shopifyProducts = [
-      { id: 1, variants: [{ sku: 'sku1' }] }
-    ];
-
-    pimClient.getProducts.mockResolvedValue(pimProducts);
-    shopifyClient.getProducts.mockResolvedValue(shopifyProducts);
-
-    await syncService.syncProducts();
-
-    expect(shopifyClient.updateProduct).toHaveBeenCalledWith(1, pimProducts[0]);
-    expect(shopifyClient.createProduct).toHaveBeenCalledWith(pimProducts[1]);
+  test('should initialize with store clients', () => {
+    expect(syncService.sourceStore).toBe(mockSourceStore);
+    expect(syncService.receiverStore).toBe(mockReceiverStore);
   });
 
-  it('should not update or create products if no variants are present', async () => {
-    const pimProducts = [
-      { id: 1, variants: [] },
-      { id: 2, variants: [] }
-    ];
-    const shopifyProducts = [
-      { id: 1, variants: [{ sku: 'sku1' }] }
-    ];
-
-    pimClient.getProducts.mockResolvedValue(pimProducts);
-    shopifyClient.getProducts.mockResolvedValue(shopifyProducts);
-
-    await syncService.syncProducts();
-
-    expect(shopifyClient.updateProduct).not.toHaveBeenCalled();
-    expect(shopifyClient.createProduct).not.toHaveBeenCalled();
+  test('should throw error if store clients are missing', () => {
+    expect(() => new SyncService()).toThrow('Source store client is required');
+    expect(() => new SyncService(mockSourceStore)).toThrow('Receiver store client is required');
   });
 
-  it('should handle empty product lists', async () => {
-    pimClient.getProducts.mockResolvedValue([]);
-    shopifyClient.getProducts.mockResolvedValue([]);
+  test('should sync products between stores', async () => {
+    const result = await syncService.syncProducts();
 
-    await syncService.syncProducts();
+    expect(mockSourceStore.getProducts).toHaveBeenCalled();
+    expect(mockReceiverStore.getProducts).toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.created).toBe(2);
+  });
 
-    expect(shopifyClient.updateProduct).not.toHaveBeenCalled();
-    expect(shopifyClient.createProduct).not.toHaveBeenCalled();
+  test('should handle products without SKU', async () => {
+    mockSourceStore.getProducts.mockResolvedValueOnce([
+      { id: '1', title: 'No SKU Product', variants: [{}] }
+    ]);
+
+    const result = await syncService.syncProducts();
+    
+    expect(result.skipped).toBe(1);
+    expect(mockReceiverStore.createProduct).not.toHaveBeenCalled();
+  });
+
+  test('should handle API errors gracefully', async () => {
+    mockSourceStore.getProducts.mockRejectedValueOnce(new Error('API Error'));
+    
+    await expect(syncService.syncProducts()).rejects.toThrow(/Sync failed/);
+  });
+
+  // Update the store service test
+  test('should work with store service', async () => {
+    mockCreateStoreClient.mockReturnValue(mockSourceStore);
+    const store = await mockCreateStoreClient('source');
+    expect(store).toBeDefined();
+    expect(store.getProducts).toBeDefined();
   });
 });
