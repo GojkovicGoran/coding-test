@@ -16,7 +16,7 @@ Shopify Admin API access tokens for both stores:
 - BATCH_SIZE=50
 - RATE_LIMIT_DELAY=500
 - MAX_FAILURES=10
-- PORT=3001
+- PORT=PORT
 - LOG_LEVEL=debug
 
 ## Prerequisites
