@@ -4,7 +4,7 @@ const config = {
       targets: {
         node: 'current'
       },
-      modules: 'auto'
+      modules: false
     }]
   ]
 };

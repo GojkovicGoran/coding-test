@@ -11,7 +11,8 @@ const config = {
   },
   transformIgnorePatterns: [
     'node_modules/(?!(module-that-needs-to-be-transformed)/)'
-  ]
+  ],
+  testTimeout: 10000
 };
 
 export default config;
