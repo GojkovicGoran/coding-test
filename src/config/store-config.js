@@ -9,8 +9,8 @@ dotenv.config({ path: join(__dirname, '../../.env') });
 const requiredEnvVars = [
   'SOURCE_STORE_NAME',
   'SOURCE_ACCESS_TOKEN',
-  'SHOPIFY_STORE_NAME',
-  'SHOPIFY_ACCESS_TOKEN',
+  'RECEIVER_STORE_NAME',
+  'RECEIVER_ACCESS_TOKEN',
   'SHOPIFY_API_VERSION'
 ];
 
@@ -26,8 +26,8 @@ export default {
     apiVersion: process.env.SHOPIFY_API_VERSION
   },
   destination: {
-    storeName: process.env.SHOPIFY_STORE_NAME,
-    accessToken: process.env.SHOPIFY_ACCESS_TOKEN,
+    storeName: process.env.RECEIVER_STORE_NAME,
+    accessToken: process.env.RECEIVER_ACCESS_TOKEN,
     apiVersion: process.env.SHOPIFY_API_VERSION
   },
   app: {
