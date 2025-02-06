@@ -1,15 +1,17 @@
 const config = {
   transform: {
-    '^.+\\.js$': ['babel-jest', { configFile: './babel.config.js' }]
+    '^.+\\.js$': ['babel-jest']
   },
   testEnvironment: 'node',
   moduleFileExtensions: ['js'],
   verbose: true,
-  extensionsToTreatAsEsm: ['.js'],
   testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
-  }
+  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(module-that-needs-to-be-transformed)/)'
+  ]
 };
 
 export default config;
