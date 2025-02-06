@@ -1,10 +1,12 @@
-export default {
+const config = {
   presets: [
     ['@babel/preset-env', {
       targets: {
         node: 'current'
       },
-      modules: 'auto'
+      modules: false
     }]
   ]
 };
+
+export default config;
