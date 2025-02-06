@@ -35,10 +35,15 @@ export class SyncService {
     try {
       logger.info('Starting products synchronization');
 
-      const [sourceProducts, receiverProducts] = await Promise.all([
-        this.sourceStore.getProducts(),
-        this.receiverStore.getProducts()
-      ]);
+      let sourceProducts, receiverProducts;
+      try {
+        [sourceProducts, receiverProducts] = await Promise.all([
+          this.sourceStore.getProducts(),
+          this.receiverStore.getProducts()
+        ]);
+      } catch (error) {
+        throw new Error(`Failed to create store client: ${error.message}`);
+      }
 
       if (!Array.isArray(sourceProducts) || !Array.isArray(receiverProducts)) {
         throw new Error('Invalid response format from API');

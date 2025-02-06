@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/app.js",
-    "test": "jest"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "version": "1.0.0",
   "main": "index.js",
@@ -23,7 +23,9 @@
   },
   "description": "",
   "devDependencies": {
+    "@babel/core": "^7.23.9",
     "@babel/preset-env": "^7.23.9",
+    "babel-jest": "^29.7.0",
     "chai": "^5.1.2",
     "chai-http": "^5.1.1",
     "jest": "^29.7.0",
