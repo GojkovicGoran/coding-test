@@ -12,10 +12,19 @@ export class SyncController {
       const destinationStore = createStoreClient('destination');
 
       // Validate both connections
-      await Promise.all([
-        validateStoreConnection(sourceStore, 'source'),
-        validateStoreConnection(destinationStore, 'destination')
-      ]);
+     // await Promise.all([
+           //   validateStoreConnection(sourceStore, 'source'),
+           //   validateStoreConnection(destinationStore, 'destination')
+           // ]);
+
+       async function validateStoreConnection(store, storeType) {
+         try {
+           await store.testConnection();
+           logger.info(`Successfully connected to ${storeType} store`);
+         } catch (error) {
+           throw new Error(`Failed to connect to ${storeType} store: ${error.message}`);
+         }
+       }
 
       // Create sync service with validated clients
       const syncService = createSyncService(sourceStore, destinationStore);
