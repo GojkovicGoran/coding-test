@@ -51,12 +51,23 @@ export class SyncService {
 
       logger.info(`Retrieved ${sourceProducts.length} source products and ${receiverProducts.length} receiver products`);
 
-      // Create lookup map for existing receiver products
+      // Create lookup maps for both source and receiver products
       const receiverProductMap = new Map();
+      const sourceProductMap = new Map();
+
+      sourceProducts.forEach(product => {
+        const sku = product.variants?.[0]?.sku;
+        if (sku) {
+          // Add timestamp if not present
+          product.lastUpdated = product.lastUpdated || new Date().toISOString();
+          sourceProductMap.set(sku, product);
+        }
+      });
+
       receiverProducts.forEach(product => {
-        const variant = product.variants?.[0];
-        if (variant?.sku) {
-          receiverProductMap.set(variant.sku, product);
+        const sku = product.variants?.[0]?.sku;
+        if (sku) {
+          receiverProductMap.set(sku, product);
         }
       });
 
@@ -65,13 +76,30 @@ export class SyncService {
         created: 0,
         updated: 0,
         failed: 0,
-        skipped: 0
+        skipped: 0,
+        unchanged: 0
       };
 
-      // Process each source product
-      for (const sourceProduct of sourceProducts) {
+      // Process products
+      for (const [sku, sourceProduct] of sourceProductMap) {
+        const receiverProduct = receiverProductMap.get(sku);
+
         try {
-          await this.processProduct(sourceProduct, receiverProductMap, stats);
+          if (receiverProduct) {
+            // Check if source product is newer
+            const hasChanges = this.hasProductChanges(sourceProduct, receiverProduct);
+            if (hasChanges) {
+              await this.updateProduct(sourceProduct, receiverProduct, sku);
+              stats.updated++;
+            } else {
+              stats.unchanged++;
+            }
+          } else {
+            await this.createProduct(sourceProduct, sku);
+            stats.created++;
+          }
+
+          stats.processed++;
 
           if (stats.processed % this.batchSize === 0) {
             logger.info(`Processed ${stats.processed} products, pausing...`);
@@ -81,140 +109,53 @@ export class SyncService {
         } catch (error) {
           stats.failed++;
           logger.error('Failed to process product', {
-            title: sourceProduct.title,
-            sku: sourceProduct.variants?.[0]?.sku,
+            sku,
             error: error.message
           });
 
           if (stats.failed >= this.maxFailures) {
             throw new Error(`Too many failures (${stats.failed}), aborting sync`);
           }
-
-          await this.sleep(this.rateLimitDelay * 2);
         }
       }
 
       logger.info('Sync completed', { stats });
       return {
         success: true,
-        ...stats,
-        total: sourceProducts.length
+        ...stats
       };
 
     } catch (error) {
       logger.error('Sync failed', { error: error.message });
-      throw new Error(`Sync failed: ${error.message}`);
-    }
-  }
-
-  async processProduct(sourceProduct, receiverProductMap, stats) {
-    const sku = sourceProduct.variants?.[0]?.sku;
-    if (!sku) {
-      logger.warn('Skipping product without SKU', { 
-        title: sourceProduct.title,
-        details: 'Product is missing SKU in first variant'
-      });
-      stats.skipped++;
-      return;
-    }
-
-    const existingProduct = receiverProductMap.get(sku);
-    
-    try {
-      // Validate IDs before processing
-      if (existingProduct) {
-        if (!this.validateProductIds(existingProduct)) {
-          logger.warn('Skipping product with invalid IDs', {
-            sku,
-            title: sourceProduct.title,
-            productId: existingProduct.id
-          });
-          stats.skipped++;
-          return;
-        }
-      }
-
-      if (existingProduct) {
-        await this.updateProduct(sourceProduct, existingProduct, sku);
-        stats.updated++;
-      } else {
-        await this.createProduct(sourceProduct, sku);
-        stats.created++;
-      }
-      stats.processed++;
-    } catch (error) {
-      const errorContext = {
-        sku,
-        title: sourceProduct.title,
-        operation: existingProduct ? 'update' : 'create',
-        errorDetails: error.details || error.message
-      };
-      
-      if (error.message?.includes('expected String to be a id')) {
-        logger.error('Invalid ID format in product data', errorContext);
-        stats.skipped++;
-        return;
-      }
-
-      logger.error('Failed to process product', errorContext);
       throw error;
     }
   }
 
-  validateProductIds(product) {
-    // Ensure product ID is a valid string number
-    if (!product.id || !/^\d+$/.test(String(product.id))) {
-      return false;
+  hasProductChanges(sourceProduct, receiverProduct) {
+    // Compare lastUpdated timestamps if available
+    if (sourceProduct.lastUpdated && receiverProduct.lastUpdated) {
+      return new Date(sourceProduct.lastUpdated) > new Date(receiverProduct.lastUpdated);
     }
 
-    // Validate variant IDs if present
-    if (product.variants) {
-      return product.variants.every(variant => 
-        variant.id && /^\d+$/.test(String(variant.id))
-      );
-    }
-
-    return true;
+    // Fall back to comparing actual content
+    return this.compareProductContent(sourceProduct, receiverProduct);
   }
 
-  async updateProduct(sourceProduct, receiverProduct, sku) {
-    logger.info(`Updating product with SKU: ${sku}`);
-
-    try {
-      // Ensure IDs are strings
-      sourceProduct.id = String(receiverProduct.id);
-
-      const minLength = Math.min(
-        sourceProduct.variants?.length || 0,
-        receiverProduct.variants?.length || 0
-      );
-
-      // Ensure variant IDs are strings
-      sourceProduct.variants = (sourceProduct.variants || []).map((variant, i) => ({
-        ...variant,
-        id: i < minLength ? String(receiverProduct.variants[i].id) : undefined
-      }));
-
-      await this.receiverStore.updateProduct(sourceProduct, sourceProduct.id);
-    } catch (error) {
-      throw new Error(`Failed to update product ${sku}: ${error.message}`);
-    }
+  compareProductContent(source, receiver) {
+    const fieldsToCompare = ['title', 'description', 'price', 'vendor', 'product_type'];
+    return fieldsToCompare.some(field => JSON.stringify(source[field]) !== JSON.stringify(receiver[field])) ||
+           this.compareVariants(source.variants, receiver.variants);
   }
 
-  async createProduct(sourceProduct, sku) {
-    logger.info(`Creating new product with SKU: ${sku}`);
-
-    // Remove existing IDs
-    const newProduct = {
-      ...sourceProduct,
-      id: undefined,
-      variants: sourceProduct.variants.map(variant => ({
-        ...variant,
-        id: undefined
-      }))
-    };
-
-    await this.receiverStore.createProduct(newProduct);
+  compareVariants(sourceVariants = [], receiverVariants = []) {
+    if (sourceVariants.length !== receiverVariants.length) return true;
+    return sourceVariants.some((sourceVariant, index) => {
+      const receiverVariant = receiverVariants[index];
+      const variantFields = ['sku', 'price', 'compare_at_price', 'inventory_quantity'];
+      return variantFields.some(field =>
+        JSON.stringify(sourceVariant[field]) !== JSON.stringify(receiverVariant[field])
+      );
+    });
   }
 }
 
